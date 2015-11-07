@@ -1,0 +1,3 @@
+tmetrics: metrics and loss functions in Theano.
+
+To start with, going to port a lot of the stuff in sklearn.metrics. Aim is to keep this simple, for instance, no data integrity checks.
