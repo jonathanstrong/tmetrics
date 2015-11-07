@@ -17,20 +17,25 @@ def brier_score_loss(y_true, y_predicted, sample_weight=None):
     port of sklearn.metrics.brier_score_loss
     works for 2D binary data as well, e.g.
 
-    [[0, 1, 0],
-     [1, 0, 0]]
+    ytrue:          [[0, 1, 0],
+                     [1, 0, 0]]
 
-    [[.1, .2, .3],
-     [.4, .5, .6]]
+    y_predicted:    [[.1, .9, .3],
+                     [.4, .7, .2]]
 
     y_true: tensor 
     y_predicted: tensor  
     sample_weight: tensor or None (standard mean)
 
     assumptions: 
-     -binary ground truth values ({0, 1})
+     -binary ground truth values ({0, 1}); no pos_label
+        training wheels like sklearn or figuring out how to 
+        run this on text labels. 
      -probabilities are floats between 0-1
      -sample_weight broadcasts to ((y_true - y_predicted) ** 2)
+
+    also:
+     - is this any different from squared error? 
 
     """
     scores = ((y_true - y_predicted) ** 2)
