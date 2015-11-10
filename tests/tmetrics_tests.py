@@ -155,6 +155,37 @@ def test_kulsinski_similarity():
     print 'score {}'.format(score)
     assert np.allclose(refscore, score)
 
+def test_trapz():
+    x = T.ivector('x')
+    y = T.ivector('y')
+    z = tmetrics.classification.trapz(y, x)
+    refscore = np.trapz([1,2,3], x=[4,6,8])
+    f = theano.function([y, x], z, allow_input_downcast=True)
+    score = f([1,2,3], [4,6,8])
+    assert np.allclose(refscore, score)
+    refscore = np.trapz([1,2,3])
+    z = tmetrics.classification.trapz(y)
+    f = theano.function([y], z, allow_input_downcast=True)
+    score = f([1,2,3])
+    assert np.allclose(refscore, score)
+    refscore = np.trapz([1,2,3], dx=2)
+    z = tmetrics.classification.trapz(y, dx=2)
+    f = theano.function([y], z, allow_input_downcast=True)
+    score = f([1,2,3])
+    assert np.allclose(score, refscore)
+    a = np.arange(6).reshape(2,3)
+    refscore = np.trapz(a, axis=0)
+    z = tmetrics.classification.trapz(y, axis=0)
+    f = theano.function([y], z, allow_input_downcast=True)
+    score = f(a)
+    assert np.allclose(score, refscore)
+    refscore = np.trapz(a, axis=1)
+    z = tmetrics.classification.trapz(y, axis=1)
+    f = theano.function([y], z, allow_input_downcast=True)
+    score = f(a)
+    assert np.allclose(score, refscore)
+
+    
 
 
 

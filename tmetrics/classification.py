@@ -195,20 +195,18 @@ def trapz(y, x=None, dx=1.0, axis=-1):
     >>> np.trapz(a, axis=1)
     array([ 2.,  8.])
     """
-    y = asanyarray(y)
     if x is None:
         d = dx
     else:
-        x = asanyarray(x)
         if x.ndim == 1:
-            d = diff(x)
+            d = T.extra_ops.diff(x)
             # reshape to correct shape
-            shape = [1]*y.ndim
-            shape[axis] = d.shape[0]
+            shape = T.ones(y.ndim, dtype='int32')
+            shape = T.set_subtensor(shape[axis], d.shape[0])
             d = d.reshape(shape)
         else:
-            d = diff(x, axis=axis)
-    nd = len(y.shape)
+            d = T.extra_ops.diff(x, axis=axis)
+    nd = y.ndim
     slice1 = [slice(None)]*nd
     slice2 = [slice(None)]*nd
     slice1[axis] = slice(1, None)
@@ -216,6 +214,7 @@ def trapz(y, x=None, dx=1.0, axis=-1):
     try:
         ret = (d * (y[slice1] + y[slice2]) / 2.0).sum(axis)
     except ValueError:
+        raise
         # Operations didn't work, cast to ndarray
         d = np.asarray(d)
         y = np.asarray(y)
