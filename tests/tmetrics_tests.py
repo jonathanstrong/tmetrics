@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import lasagne
 import sklearn.metrics
+from scipy.spatial.distance import hamming, jaccard, kulsinski
 
 
 def setup():
@@ -13,8 +14,35 @@ def setup():
 def teardown():
     pass
 
-def testing_testing_123():
-    assert 1 > 0
+def test_binary_clf_curve():
+    yt = T.ivector('yt')
+    yp = T.fvector('yp')
+    tps = tmetrics.classification._binary_clf_curve(yt, yp)
+    f = theano.function([yt, yp], tps, allow_input_downcast=True)
+    true, predicted = np.random.binomial(n=1, p=.5, size=10), np.random.random(10)
+    fps, tps, _ = f(true, predicted)
+    s_fps, s_tps, s_ = sklearn.metrics.ranking._binary_clf_curve(true, predicted)
+    np.set_printoptions(suppress=True)
+    print 'true'
+    print true
+    print 'predicted'
+    print predicted
+    print 'fps'
+    print fps
+    print 'sklearn fps'
+    print s_fps
+    print 'tps'
+    print tps
+    print 'sklearn tps'
+    print s_tps
+    print 'threshold values'
+    print _
+    print 'sklearn threshold values'
+    print s_
+    assert np.allclose(fps, s_fps)
+    assert np.allclose(tps, s_tps)
+    assert np.allclose(_, s_)
+
 
 def test_brier_score_loss_from_scikit_learn_example():
     """
@@ -57,4 +85,77 @@ def test_brier_score_loss_2D():
     tol = .01
     score = f(yt, yp)
     assert (refscore - tol) < score < (refscore + tol)
+
+
+def test_hammming_loss():
+    true = np.random.binomial(n=1, p=.5, size=10)
+    predicted = np.round(np.random.random(10))
+    refscore = hamming(true, predicted)
+    yt = T.fvector('yt')
+    yp = T.fvector('yp')
+    f = theano.function([yt, yp], tmetrics.classification.hamming_loss(yt, yp), allow_input_downcast=True)
+    score = f(true, predicted)
+    print 'true'
+    print true
+    print 'predicted'
+    print predicted
+    print 'refscore {}'.format(refscore)
+    print 'score {}'.format(score)
+    assert np.allclose(refscore, score)
+
+def test_jaccard_similarity():
+    true = np.random.binomial(n=1, p=.5, size=10)
+    predicted = np.round(np.random.random(10))
+    refscore = jaccard(true, predicted)
+    yt = T.fvector('yt')
+    yp = T.fvector('yp')
+    f = theano.function([yt, yp], tmetrics.classification.jaccard_similarity(yt, yp), allow_input_downcast=True)
+    score = f(true, predicted)
+    print 'true'
+    print true
+    print 'predicted'
+    print predicted
+    print 'refscore {}'.format(refscore)
+    print 'score {}'.format(score)
+    assert np.allclose(refscore, score)
+
+def test_jaccard_similarity_2D():
+    true = np.random.binomial(n=1, p=.5, size=10)
+    predicted = np.round(np.random.random(10))
+    refscore = np.asarray([jaccard(true, predicted)])
+    double = lambda x: np.concatenate([x.reshape((1, len(x))), x.reshape((1, len(x)))])
+    true, predicted, refscore = tuple(double(x) for x in [true, predicted, refscore])
+    yt = T.fmatrix('yt')
+    yp = T.fmatrix('yp')
+    f = theano.function([yt, yp], tmetrics.classification.jaccard_similarity(yt, yp), allow_input_downcast=True)
+    score = f(true, predicted)
+    print 'true'
+    print true
+    print 'predicted'
+    print predicted
+    print 'refscore {}'.format(refscore)
+    print 'score {}'.format(score)
+    assert np.allclose(refscore, score)
+
+
+
+def test_kulsinski_similarity():
+    true = np.double(np.random.binomial(n=1, p=.5, size=10))
+    predicted = np.double(np.round(np.random.random(10)))
+    refscore = kulsinski(true, predicted)
+    yt = T.fvector('yt')
+    yp = T.fvector('yp')
+    f = theano.function([yt, yp], tmetrics.classification.kulsinski_similarity(yt, yp), allow_input_downcast=True)
+    score = f(true, predicted)
+    print 'true'
+    print true
+    print 'predicted'
+    print predicted
+    print 'refscore {}'.format(refscore)
+    print 'score {}'.format(score)
+    assert np.allclose(refscore, score)
+
+
+
+
 
