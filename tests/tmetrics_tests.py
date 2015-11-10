@@ -40,6 +40,9 @@ def test_brier_score_loss_from_scikit_learn_example():
     score = f(yt, yp)
     assert (refscore - tol) < score < (refscore + tol)
 
+    #also test the function is numpy/pandas compatible
+    assert (refscore - tol) < tmetrics.brier_score_loss(yt, yp) < (refscore + tol)
+
 
 def test_brier_score_loss_2D():
     yt = np.array([0, 1, 1, 0], 'int32')
@@ -54,5 +57,4 @@ def test_brier_score_loss_2D():
     tol = .01
     score = f(yt, yp)
     assert (refscore - tol) < score < (refscore + tol)
-
 
