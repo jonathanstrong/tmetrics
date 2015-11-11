@@ -187,12 +187,11 @@ def test_trapz():
     score = f(a)
     assert np.allclose(score, refscore)
 
-    
 def test_roc_auc_score():
-    #true = np.random.binomial(n=1, p=.5, size=1000).astype('int32')
-    true = np.array([0, 0, 1, 1]).astype('int32')
-    #predicted = np.random.random(size=1000).astype('float32')
-    predicted = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
+    true = np.random.binomial(n=1, p=.5, size=1000).astype('int32')
+    #true = np.array([0, 0, 1, 1]).astype('int32')
+    predicted = np.random.random(size=1000).astype('float32')
+    #predicted = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
     yt = T.ivector('y_true')
     yp = T.fvector('y_predicted')
     roc_auc_score_expr = tmetrics.classification.roc_auc_score(yt, yp)
@@ -206,19 +205,25 @@ def test_roc_auc_score():
     try:
         assert np.allclose(refscore, score)
     except AssertionError:
-        fpr, tpr, thresholds = tmetrics.classification._binary_clf_curve(yt, yp)
-        trapz = tmetrics.classification.trapz(fpr, tpr)
-        f = theano.function([yt, yp], [fpr, tpr, thresholds, trapz])
+        fps, tps, thresholds = tmetrics.classification._binary_clf_curve(yt, yp)
+        fpr, tpr, _thresh = tmetrics.classification.roc_curve(yt, yp)
+        f = theano.function([yt, yp], [fps, tps, thresholds, fpr, tpr, _thresh, roc_auc_score_expr])
         result = f(true, predicted)
         print '** tmetrics **'
-        print 'fpr'
+        print 'fps'
         print result[0]
-        print 'tpr'
+        print 'tps'
         print result[1]
         print 'thresholds'
         print result[2]
-        print 'trapz'
+        print 'fpr'
         print result[3]
+        print 'tpr'
+        print result[4]
+        print '_thresh'
+        print result[5]
+        print 'roc score'
+        print results[6]
 
         print '** refscore **'
         curve = sklearn.metrics.ranking._binary_clf_curve(true, predicted)
@@ -228,10 +233,31 @@ def test_roc_auc_score():
         print curve[1]
         print 'thresholds'
         print curve[2]
-        trapz = np.trapz(curve[0], curve[1])
+        trapz = np.trapz(curve[1], curve[0])
         print 'trapz'
         print trapz
+        print 'auc'
+        print sklearn.metrics.ranking.auc(curve[0], curve[1])
+        print 'roc_curve'
+        print sklearn.metrics.roc_curve(true, predicted)
         raise
 
+def test_that_we_can_work_around_lexsort():
+    x = np.asarray([0., 1., 1., 2.])
+    y = np.asarray([1., 1., 2., 2.])
+    order = np.lexsort((y, x))
+    x1, y1 = x[order], y[order]
+    sort_one = y.argsort()
+    x2, y2 = x[sort_one], y[sort_one]
+    sort_two = x2.argsort()
+    x3, y3 = x2[sort_two], y2[sort_two]
+    print 'x: {}; y: {}'.format(x, y)
+    print 'x1: {}; y1: {}'.format(x1, y1)
+    print 'x2: {}; y2: {}'.format(x2, y2)
+    print 'x3: {}; y3: {}'.format(x3, y3)
+    assert np.allclose(x1, x3)
+    assert np.allclose(y1, y3)
+
+    
 
 

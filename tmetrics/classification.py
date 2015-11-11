@@ -70,39 +70,6 @@ def brier_score_loss(y_true, y_predicted, sample_weight=None):
         scores = scores * sample_weight
     return scores.mean()
 
-def _binary_clf_curve(y_true, y_predicted):
-    """
-    sklearn.metrics._binary_clf_curve port
-
-    y_true: tensor (ivector): y true
-    y_predicted: tensor (fvector): y predicted
-
-    returns: fps, tps, threshold_values
-    fps: tensor (ivector): false positivies
-    tps: tensor (ivector): true positives
-    threshold_values: tensor (fvector): value of y predicted at each threshold 
-        along the curve
-
-    restrictions: 
-        -not numpy compatible
-        -only works with two vectors (not matrix or tensor)
-
-
-    """
-    desc_score_indices = y_predicted.argsort()[::-1]
-    sorted_y_predicted = y_predicted[desc_score_indices]
-    sorted_y_true = y_true[desc_score_indices]
-
-    distinct_value_indices = (1-T.isclose(T.extra_ops.diff(sorted_y_predicted), 0)).nonzero()[0]
-    curve_cap = T.extra_ops.repeat(sorted_y_predicted.size - 1, 1)
-    threshold_indices = T.concatenate([distinct_value_indices, curve_cap])
-
-    tps = T.extra_ops.cumsum(sorted_y_true[threshold_indices])
-    fps = 1 + threshold_indices - tps
-    threshold_values = sorted_y_predicted[threshold_indices]
-
-    return fps, tps, threshold_values
-
 def hamming_loss(y_true, y_predicted):
     """
     note - works on n-dim arrays, means across the final axis
@@ -143,7 +110,40 @@ def kulsinski_similarity(y_true, y_predicted):
     nff, nft, ntf, ntt = _nbool_correspond_all(y_true, y_predicted)
     n = y_true.shape[0].astype('float32')
     return (ntf + nft - ntt + n) / (ntf + nft + n)
-        
+
+def _binary_clf_curve(y_true, y_predicted):
+    """
+    sklearn.metrics._binary_clf_curve port
+
+    y_true: tensor (ivector): y true
+    y_predicted: tensor (fvector): y predicted
+
+    returns: fps, tps, threshold_values
+    fps: tensor (ivector): false positivies
+    tps: tensor (ivector): true positives
+    threshold_values: tensor (fvector): value of y predicted at each threshold 
+        along the curve
+
+    restrictions: 
+        -not numpy compatible
+        -only works with two vectors (not matrix or tensor)
+
+
+    """
+    desc_score_indices = y_predicted.argsort()[::-1]
+    sorted_y_predicted = y_predicted[desc_score_indices]
+    sorted_y_true = y_true[desc_score_indices]
+
+    distinct_value_indices = (1-T.isclose(T.extra_ops.diff(sorted_y_predicted), 0)).nonzero()[0]
+    curve_cap = T.extra_ops.repeat(sorted_y_predicted.size - 1, 1)
+    threshold_indices = T.concatenate([distinct_value_indices, curve_cap])
+
+    tps = T.extra_ops.cumsum(sorted_y_true[threshold_indices])
+    fps = 1 + threshold_indices - tps
+    threshold_values = sorted_y_predicted[threshold_indices]
+
+    return fps, tps, threshold_values
+       
 def trapz(y, x=None, dx=1.0, axis=-1):
     """
     port from numpy.trapz ... pretty much exact function.
@@ -220,7 +220,15 @@ def trapz(y, x=None, dx=1.0, axis=-1):
 def auc(x, y):
     return trapz(y, x)
 
+def roc_curve(y_true, y_predicted):
+    fps, tps, thresholds = _binary_clf_curve(y_true, y_predicted)
+    fpr = fps.astype('float32') / fps[-1]
+    tpr = tps.astype('float32') / tps[-1]
+    return fpr, tpr, thresholds
+
 def roc_auc_score(y_true, y_predicted):
-    fpr, tpr, thresholds = _binary_clf_curve(y_true, y_predicted)
+    fpr, tpr, thresholds = roc_curve(y_true, y_predicted)
     return auc(fpr, tpr)
+
+
 
