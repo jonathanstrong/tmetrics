@@ -144,9 +144,12 @@ def kulsinski_similarity(y_true, y_predicted):
     n = y_true.shape[0].astype('float32')
     return (ntf + nft - ntt + n) / (ntf + nft + n)
         
-"will need to implement this numpy function below"
 def trapz(y, x=None, dx=1.0, axis=-1):
     """
+    port from numpy.trapz ... pretty much exact function.
+
+    ...
+
     Integrate along the given axis using the composite trapezoidal rule.
     Integrate `y` (`x`) along given axis.
     Parameters
@@ -211,12 +214,13 @@ def trapz(y, x=None, dx=1.0, axis=-1):
     slice2 = [slice(None)]*nd
     slice1[axis] = slice(1, None)
     slice2[axis] = slice(None, -1)
-    try:
-        ret = (d * (y[slice1] + y[slice2]) / 2.0).sum(axis)
-    except ValueError:
-        raise
-        # Operations didn't work, cast to ndarray
-        d = np.asarray(d)
-        y = np.asarray(y)
-        ret = add.reduce(d * (y[slice1]+y[slice2])/2.0, axis)
-    return ret
+
+    return (d * (y[slice1] + y[slice2]) / 2.0).sum(axis)
+
+def auc(x, y):
+    return trapz(y, x)
+
+def roc_auc_score(y_true, y_predicted):
+    fpr, tpr, thresholds = _binary_clf_curve(y_true, y_predicted)
+    return auc(fpr, tpr)
+

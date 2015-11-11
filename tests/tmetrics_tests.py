@@ -188,7 +188,50 @@ def test_trapz():
     assert np.allclose(score, refscore)
 
     
+def test_roc_auc_score():
+    #true = np.random.binomial(n=1, p=.5, size=1000).astype('int32')
+    true = np.array([0, 0, 1, 1]).astype('int32')
+    #predicted = np.random.random(size=1000).astype('float32')
+    predicted = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
+    yt = T.ivector('y_true')
+    yp = T.fvector('y_predicted')
+    roc_auc_score_expr = tmetrics.classification.roc_auc_score(yt, yp)
+    refscore = sklearn.metrics.roc_auc_score(true, predicted)
+    print 'refscore'
+    print refscore
+    f = theano.function([yt, yp], roc_auc_score_expr)
+    score = f(true, predicted)
+    print 'score'
+    print score
+    try:
+        assert np.allclose(refscore, score)
+    except AssertionError:
+        fpr, tpr, thresholds = tmetrics.classification._binary_clf_curve(yt, yp)
+        trapz = tmetrics.classification.trapz(fpr, tpr)
+        f = theano.function([yt, yp], [fpr, tpr, thresholds, trapz])
+        result = f(true, predicted)
+        print '** tmetrics **'
+        print 'fpr'
+        print result[0]
+        print 'tpr'
+        print result[1]
+        print 'thresholds'
+        print result[2]
+        print 'trapz'
+        print result[3]
 
+        print '** refscore **'
+        curve = sklearn.metrics.ranking._binary_clf_curve(true, predicted)
+        print 'fpr'
+        print curve[0]
+        print 'tpr'
+        print curve[1]
+        print 'thresholds'
+        print curve[2]
+        trapz = np.trapz(curve[0], curve[1])
+        print 'trapz'
+        print trapz
+        raise
 
 
 
