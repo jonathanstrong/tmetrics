@@ -258,6 +258,36 @@ def test_that_we_can_work_around_lexsort():
     assert np.allclose(x1, x3)
     assert np.allclose(y1, y3)
 
-    
+""" 
+def test_roc_curve_nd():
+    true = np.random.binomial(n=1, p=.5, size=(2, 5)).astype('int32')
+    predicted = np.random.random((2, 5)).astype('float32')
+    yt = T.imatrix('yt')
+    yp = T.fmatrix('yp')
+    clf_curve = tmetrics.classification._binary_clf_curve_nd(yt, yp)
+    f = theano.function([yt, yp], clf_curve)
+    print 'true'
+    print true
+    print 'predicted'
+    print predicted
+    print 'tmetrics.classification._binary_clf_curve_nd(true, predicted)'
+    print f(true, predicted)
+    #print 'tmetrics.classification.roc_curve(true, predicted)'
+    #print f(true, predicted)
+    #assert False
+"""
 
 
+def test_matrix_roc_scores():
+    true = np.random.binomial(n=1, p=.5, size=(20, 100)).astype('int32')
+    predicted = np.random.random((20, 100)).astype('float32')
+    yt, yp = T.imatrix('yt'), T.fmatrix('yp')
+    refscore = tmetrics.classification.last_axis_roc_scores(true, predicted)
+    roc_scores = tmetrics.classification.matrix_roc_scores(yt, yp)
+    f = theano.function([yt, yp], roc_scores)
+    score = f(true, predicted)
+    print 'refscore'
+    print refscore
+    print 'score'
+    print score
+    assert np.allclose(refscore, score)

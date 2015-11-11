@@ -130,6 +130,7 @@ def _binary_clf_curve(y_true, y_predicted):
 
 
     """
+
     desc_score_indices = y_predicted.argsort()[::-1]
     sorted_y_predicted = y_predicted[desc_score_indices]
     sorted_y_true = y_true[desc_score_indices]
@@ -143,12 +144,32 @@ def _binary_clf_curve(y_true, y_predicted):
     threshold_values = sorted_y_predicted[threshold_indices]
 
     return fps, tps, threshold_values
+
+def _binary_clf_curve_nd(y_true, y_predicted, axis=-1):
+    """
+    returns y_predicted.shape[axis] binary clf curves calculated axis-wise
+
+    """
+    sort_idx = [slice(None)] * y_predicted.ndim
+    sort_idx[axis] = desc_score_indices = y_predicted.argsort()[::-1]
+    sorted_y_predicted = y_predicted[sort_idx]
+    sorted_y_true = y_true[sort_idx]
+
+    distinct_idx = [slice(None)] * y_predicted.ndim
+    distinct_idx[axis] = distinct_value_indices = (1-T.isclose(T.extra_ops.diff(sorted_y_predicted), 0)).nonzero()[0]
+    curve_cap = T.extra_ops.repeat(sorted_y_predicted.size - 1, 1)
+    threshold_indices = T.concatenate([distinct_value_indices, curve_cap])
+
+    tps = T.extra_ops.cumsum(sorted_y_true[threshold_indices])
+    fps = 1 + threshold_indices - tps
+    threshold_values = sorted_y_predicted[threshold_indices]
+
+    return fps, tps, threshold_values
        
 def trapz(y, x=None, dx=1.0, axis=-1):
     """
-    port from numpy.trapz ... pretty much exact function.
-
-    ...
+    reference implementation: numpy.trapz 
+    ---------
 
     Integrate along the given axis using the composite trapezoidal rule.
     Integrate `y` (`x`) along given axis.
@@ -230,5 +251,64 @@ def roc_auc_score(y_true, y_predicted):
     fpr, tpr, thresholds = roc_curve(y_true, y_predicted)
     return auc(fpr, tpr)
 
+"""
+NUMPY ONLY FUNCTIONS
+"""
+def _last_axis_binary_clf_curve(y_true, y_predicted):
+    """
+    returns y_predicted.shape[-2] binary clf curves calculated axis[-1]-wise
+
+    """
+    assert y_true.shape == y_predicted.shape
+    axis = -1
+    sort_idx = list(np.ogrid[[slice(x) for x in y_predicted.shape]])
+    sort_idx[axis] = y_predicted.argsort(axis=axis)
+    reverse = [slice(None)] * y_predicted.ndim
+    reverse[axis] = slice(None, None, -1)
+    sorted_y_predicted = y_predicted[sort_idx][reverse]
+    sorted_y_true = y_true[sort_idx][reverse]
+
+
+    tps = sorted_y_true.cumsum(axis=axis)
+    count = (np.ones(y_predicted.shape) * np.arange(y_predicted.shape[-1]))
+    fps = 1 + count - tps
+    threshold_values = sorted_y_predicted
+
+    return fps, tps, threshold_values
+
+def last_axis_roc_curve(y_true, y_predicted):
+    fps, tps, thresholds = _last_axis_binary_clf_curve(y_true, y_predicted)
+    i = [slice(None)] * fps.ndim
+    i[-1] = -1
+    fpr = fps.astype('float32') / fps[i][:, np.newaxis]
+    tpr = tps.astype('float32') / tps[i][:, np.newaxis]
+    return fpr, tpr, thresholds
+
+def last_axis_roc_scores(y_true, y_predicted):
+    fpr, tpr, _ = last_axis_roc_curve(y_true, y_predicted)
+    return np.trapz(tpr, fpr)
+
+
+def _matrix_clf_curve(y_true, y_predicted):
+    assert y_true.ndim == y_predicted.ndim == 2
+    row_i = T.arange(y_true.shape[0]).dimshuffle(0, 'x')
+    col_i = y_predicted.argsort()
+    reverse = [slice(None), slice(None, None, -1)]
+    y_true = y_true[row_i, col_i][reverse]
+    y_predicted = y_predicted[row_i, col_i][reverse]
+    tps = y_true.cumsum(axis=-1)
+    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1])
+    fps = 1 + counts - tps
+    return fps, tps, y_predicted
+
+def matrix_roc_curves(y_true, y_predicted):
+    fps, tps, thresholds = _matrix_clf_curve(y_true, y_predicted)
+    fpr = fps.astype('float32') / fps[:, -1].dimshuffle(0, 'x')
+    tpr = tps.astype('float32') / tps[:, -1].dimshuffle(0, 'x')
+    return fpr, tpr, thresholds
+
+def matrix_roc_scores(y_true, y_predicted):
+    fpr, tpr, thresholds = matrix_roc_curves(y_true, y_predicted)
+    return auc(fpr, tpr)
 
 
