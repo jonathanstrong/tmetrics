@@ -130,6 +130,7 @@ def _binary_clf_curve(y_true, y_predicted):
 
 
     """
+    assert y_true.ndim == y_predicted.ndim == 1
 
     desc_score_indices = y_predicted.argsort()[::-1]
     sorted_y_predicted = y_predicted[desc_score_indices]
@@ -144,28 +145,7 @@ def _binary_clf_curve(y_true, y_predicted):
     threshold_values = sorted_y_predicted[threshold_indices]
 
     return fps, tps, threshold_values
-
-def _binary_clf_curve_nd(y_true, y_predicted, axis=-1):
-    """
-    returns y_predicted.shape[axis] binary clf curves calculated axis-wise
-
-    """
-    sort_idx = [slice(None)] * y_predicted.ndim
-    sort_idx[axis] = desc_score_indices = y_predicted.argsort()[::-1]
-    sorted_y_predicted = y_predicted[sort_idx]
-    sorted_y_true = y_true[sort_idx]
-
-    distinct_idx = [slice(None)] * y_predicted.ndim
-    distinct_idx[axis] = distinct_value_indices = (1-T.isclose(T.extra_ops.diff(sorted_y_predicted), 0)).nonzero()[0]
-    curve_cap = T.extra_ops.repeat(sorted_y_predicted.size - 1, 1)
-    threshold_indices = T.concatenate([distinct_value_indices, curve_cap])
-
-    tps = T.extra_ops.cumsum(sorted_y_true[threshold_indices])
-    fps = 1 + threshold_indices - tps
-    threshold_values = sorted_y_predicted[threshold_indices]
-
-    return fps, tps, threshold_values
-       
+      
 def trapz(y, x=None, dx=1.0, axis=-1):
     """
     reference implementation: numpy.trapz 
@@ -241,15 +221,15 @@ def trapz(y, x=None, dx=1.0, axis=-1):
 def auc(x, y):
     return trapz(y, x)
 
-def roc_curve(y_true, y_predicted):
-    fps, tps, thresholds = _binary_clf_curve(y_true, y_predicted)
-    fpr = fps.astype('float32') / fps[-1]
-    tpr = tps.astype('float32') / tps[-1]
-    return fpr, tpr, thresholds
-
-def roc_auc_score(y_true, y_predicted):
-    fpr, tpr, thresholds = roc_curve(y_true, y_predicted)
-    return auc(fpr, tpr)
+#def roc_curve(y_true, y_predicted):
+#    fps, tps, thresholds = _binary_clf_curve(y_true, y_predicted)
+#    fpr = fps.astype('float32') / fps[-1]
+#    tpr = tps.astype('float32') / tps[-1]
+#    return fpr, tpr, thresholds
+#
+#def roc_auc_score(y_true, y_predicted):
+#    fpr, tpr, thresholds = roc_curve(y_true, y_predicted)
+#    return auc(fpr, tpr)
 
 """
 NUMPY ONLY FUNCTIONS
@@ -280,11 +260,12 @@ def last_axis_roc_curve(y_true, y_predicted):
     fps, tps, thresholds = _last_axis_binary_clf_curve(y_true, y_predicted)
     i = [slice(None)] * fps.ndim
     i[-1] = -1
-    fpr = fps.astype('float32') / fps[i][:, np.newaxis]
-    tpr = tps.astype('float32') / tps[i][:, np.newaxis]
+    fpr = fps.astype('float32') / np.expand_dims(fps[i], axis=-1)
+    tpr = tps.astype('float32') / np.expand_dims(tps[i], axis=-1)
+    #tpr = tps.astype('float32') / tps[i][:, np.newaxis]
     return fpr, tpr, thresholds
 
-def last_axis_roc_scores(y_true, y_predicted):
+def last_axis_roc_auc_scores(y_true, y_predicted):
     fpr, tpr, _ = last_axis_roc_curve(y_true, y_predicted)
     return np.trapz(tpr, fpr)
 
@@ -301,14 +282,75 @@ def _matrix_clf_curve(y_true, y_predicted):
     fps = 1 + counts - tps
     return fps, tps, y_predicted
 
-def matrix_roc_curves(y_true, y_predicted):
-    fps, tps, thresholds = _matrix_clf_curve(y_true, y_predicted)
-    fpr = fps.astype('float32') / fps[:, -1].dimshuffle(0, 'x')
-    tpr = tps.astype('float32') / tps[:, -1].dimshuffle(0, 'x')
+def _tensor3_clf_curve(y_true, y_predicted):
+    assert y_true.ndim == y_predicted.ndim == 3
+    x_i = T.arange(y_true.shape[0]).dimshuffle(0, 'x', 'x')
+    y_i = T.arange(y_true.shape[1]).dimshuffle('x', 0, 'x')
+    z_i = y_predicted.argsort()
+    reverse = [slice(None), slice(None), slice(None, None, -1)]
+    y_true = y_true[x_i, y_i, z_i][reverse]
+    y_predicted = y_predicted[x_i, y_i, z_i][reverse]
+    tps = y_true.cumsum(axis=-1)
+    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1])
+    fps = 1 + counts - tps
+    return fps, tps, y_predicted
+
+def _tensor4_clf_curve(y_true, y_predicted):
+    assert y_true.ndim == y_predicted.ndim == 4
+    a_i = T.arange(y_true.shape[0]).dimshuffle(0, 'x', 'x', 'x')
+    b_i = T.arange(y_true.shape[1]).dimshuffle('x', 0, 'x', 'x')
+    c_i = T.arange(y_true.shape[2]).dimshuffle('x', 'x', 0, 'x')
+    d_i = y_predicted.argsort()
+
+    reverse = [slice(None), slice(None), slice(None), slice(None, None, -1)]
+    y_true = y_true[a_i, b_i, c_i, d_i][reverse]
+    y_predicted = y_predicted[a_i, b_i, c_i, d_i][reverse]
+    tps = y_true.cumsum(axis=-1)
+    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1])
+    fps = 1 + counts - tps
+    return fps, tps, y_predicted
+
+def roc_curves(y_true, y_predicted):
+    """
+    returns roc curves calculated axis[-1]-wise
+
+    note - despite trying several approaches, could not seem to get a
+    n-dimensional verision of clf_curve to work, so abandoning. 2,3,4 is fine.
+
+    """
+    if not (y_true.ndim == y_predicted.ndim):
+        raise ValueError('Dimension mismatch, ({}, {})'.format(y_true.ndim, y_predicted.ndim))
+    if not isinstance(y_true, T.TensorVariable) or not isinstance(y_predicted, T.TensorVariable):
+        raise TypeError('This only works for symbolic variables.')
+
+    if y_true.ndim == 1:
+        clf_curve_fn = _binary_clf_curve
+    elif y_true.ndim == 2:
+        clf_curve_fn = _matrix_clf_curve
+    elif y_true.ndim == 3: 
+        clf_curve_fn = _tensor3_clf_curve
+    elif y_true.ndim == 4:
+        clf_curve_fn = _tensor4_clf_curve
+    else:
+        raise NotImplementedError('Not implemented for ndim {}'.format(y_true.ndim))
+
+    last_col = [slice(None) for x in xrange(y_true.ndim)]
+    last_col[-1] = -1
+    fps, tps, thresholds = clf_curve_fn(y_true, y_predicted)
+    fpr = fps.astype('float32') / T.shape_padright(fps[last_col], 1)
+    tpr = tps.astype('float32') / T.shape_padright(tps[last_col], 1)
     return fpr, tpr, thresholds
 
-def matrix_roc_scores(y_true, y_predicted):
-    fpr, tpr, thresholds = matrix_roc_curves(y_true, y_predicted)
+def roc_auc_scores(y_true, y_predicted):
+    "returns roc auc scores calculated axis[-1]-wise"
+    if not (y_true.ndim == y_predicted.ndim):
+        raise ValueError('Dimension mismatch, ({}, {})'.format(y_true.ndim, y_predicted.ndim))
+    if not isinstance(y_true, T.TensorVariable) or not isinstance(y_predicted, T.TensorVariable):
+        raise TypeError('This only works for symbolic variables.')
+    fpr, tpr, thresholds = roc_curves(y_true, y_predicted)
     return auc(fpr, tpr)
 
+#aliases
+roc_curve = roc_curves
+roc_auc_score = roc_auc_scores
 

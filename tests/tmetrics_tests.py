@@ -6,6 +6,7 @@ import pandas as pd
 import lasagne
 import sklearn.metrics
 from scipy.spatial.distance import hamming, jaccard, kulsinski
+import nose.tools
 
 
 def setup():
@@ -278,16 +279,107 @@ def test_roc_curve_nd():
 """
 
 
-def test_matrix_roc_scores():
+def test_matrix_roc_auc_scores():
     true = np.random.binomial(n=1, p=.5, size=(20, 100)).astype('int32')
     predicted = np.random.random((20, 100)).astype('float32')
     yt, yp = T.imatrix('yt'), T.fmatrix('yp')
-    refscore = tmetrics.classification.last_axis_roc_scores(true, predicted)
-    roc_scores = tmetrics.classification.matrix_roc_scores(yt, yp)
-    f = theano.function([yt, yp], roc_scores)
+    refscore = tmetrics.classification.last_axis_roc_auc_scores(true, predicted)
+    roc_auc_scores = tmetrics.classification.roc_auc_scores(yt, yp)
+    f = theano.function([yt, yp], roc_auc_scores)
     score = f(true, predicted)
     print 'refscore'
     print refscore
     print 'score'
     print score
     assert np.allclose(refscore, score)
+
+def test_tensor3_roc_auc_scores():
+    true = np.random.binomial(n=1, p=.5, size=(20, 30, 40)).astype('int32')
+    predicted = np.random.random((20, 30, 40)).astype('float32')
+    yt, yp = T.itensor3('yt'), T.ftensor3('yp')
+    refscore = tmetrics.classification.last_axis_roc_auc_scores(true, predicted)
+    roc_auc_scores = tmetrics.classification.roc_auc_scores(yt, yp)
+    f = theano.function([yt, yp], roc_auc_scores)
+    score = f(true, predicted)
+    print 'refscore'
+    print refscore
+    print 'score'
+    print score
+    assert np.allclose(refscore, score, equal_nan=True)
+
+def test_tensor4_roc_auc_scores():
+    true = np.random.binomial(n=1, p=.5, size=(20, 30, 40, 50)).astype('int32')
+    predicted = np.random.random((20, 30, 40, 50)).astype('float32')
+    yt, yp = T.itensor4('yt'), T.ftensor4('yp')
+    refscore = tmetrics.classification.last_axis_roc_auc_scores(true, predicted)
+    roc_auc_scores = tmetrics.classification.roc_auc_scores(yt, yp)
+    f = theano.function([yt, yp], roc_auc_scores)
+    score = f(true, predicted)
+    print 'refscore'
+    print refscore
+    print 'score'
+    print score
+    assert np.allclose(refscore, score, equal_nan=True)
+
+@nose.tools.raises(TypeError)
+def test_roc_curves_exception_if_numpy_object_passed():
+    y = np.array([0, 0, 1, 1]).astype('int32')
+    scores = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
+    fpr, tpr, thresh = tmetrics.classification.roc_curves(y, scores)
+
+@nose.tools.raises(ValueError)
+def test_roc_curves_dimension_checker():
+    y = T.imatrix('y')
+    p = T.ftensor3('p')
+    fpr, tpr, _ = tmetrics.classification.roc_curves(y, p)
+
+@nose.tools.raises(TypeError)
+def test_roc_auc_scores_exception_if_numpy_object_passed():
+    y = np.array([0, 0, 1, 1]).astype('int32')
+    scores = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
+    fpr, tpr, thresh = tmetrics.classification.roc_auc_scores(y, scores)
+
+@nose.tools.raises(ValueError)
+def test_roc_auc_scores_dimension_checker():
+    y = T.imatrix('y')
+    p = T.ftensor3('p')
+    fpr, tpr, _ = tmetrics.classification.roc_auc_scores(y, p)
+
+
+def test_1D_roc_auc_scores():
+    yt = T.ivector('yt')
+    yp = T.fvector('yp')
+    y = np.array([0, 0, 1, 1]).astype('int32')
+    scores = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
+    ref_fpr, ref_tpr, ref_thresh = sklearn.metrics.roc_curve(y, scores)
+    roc_auc_scores = tmetrics.classification.roc_auc_scores(yt, yp)
+    fpr, tpr, thresh = tmetrics.classification.roc_curves(yt, yp)
+    f = theano.function([yt, yp], [fpr, tpr, thresh, roc_auc_scores])
+    score_fpr, score_tpr, score_thresh, score_auc = f(y ,scores)
+    assert np.allclose(ref_fpr, score_fpr)
+    assert np.allclose(ref_tpr, score_tpr)
+    assert np.allclose(ref_thresh, score_thresh)
+    assert np.allclose(sklearn.metrics.roc_auc_score(y, scores), score_auc)
+
+def test_roc_scores_slogan():
+    "returns roc curves calculated axis[-1]-wise"
+    yt = T.itensor4('yt')
+    yp = T.ftensor4('yp')
+    true = np.random.binomial(n=1, p=.5, size=(2, 3, 4, 5)).astype('int32')
+    predicted = np.random.random((2, 3, 4, 5)).astype('float32')
+    fpr_e, tpr_e, _e = tmetrics.classification.roc_curves(yt, yp)
+    scores_expr = tmetrics.classification.roc_auc_scores(yt, yp)
+    f = theano.function([yt, yp], [fpr_e, tpr_e, _e, scores_expr])
+    fpr, tpr, _, scores = f(true, predicted)
+    print true.shape, predicted.shape, fpr.shape, scores.shape
+    print true
+    print predicted
+    print fpr
+    print tpr
+    print _
+    print scores
+    assert true.shape == predicted.shape == fpr.shape == tpr.shape == _.shape
+    assert true.shape[:-1] == scores.shape
+
+    
+
