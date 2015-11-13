@@ -7,6 +7,7 @@ import lasagne
 import sklearn.metrics
 from scipy.spatial.distance import hamming, jaccard, kulsinski
 import nose.tools
+from theano.tensor.tests.test_basic import makeTester
 
 
 def setup():
@@ -15,10 +16,10 @@ def setup():
 def teardown():
     pass
 
-def test_binary_clf_curve():
+def test_vector_clf_curve():
     yt = T.ivector('yt')
     yp = T.fvector('yp')
-    tps = tmetrics.classification._binary_clf_curve(yt, yp)
+    tps = tmetrics.classification._vector_clf_curve(yt, yp)
     f = theano.function([yt, yp], tps, allow_input_downcast=True)
     true, predicted = np.random.binomial(n=1, p=.5, size=10), np.random.random(10)
     fps, tps, _ = f(true, predicted)
@@ -381,5 +382,116 @@ def test_roc_scores_slogan():
     assert true.shape == predicted.shape == fpr.shape == tpr.shape == _.shape
     assert true.shape[:-1] == scores.shape
 
-    
+
+def test_precisison_recall_curves_vector(n_iter=1):
+    yt = T.ivector('yt')
+    yp = T.fvector('yp')
+    p_expr, r_expr, thresh_expr = tmetrics.classification.precision_recall_curves(yt, yp)
+    f = theano.function([yt, yp], [p_expr, r_expr, thresh_expr])
+    for iterator in xrange(n_iter):
+        y = np.random.binomial(n=1, p=.5, size=20).astype('int32')
+        scores = np.random.random(20).astype('float32')
+        ref_precision, ref_recall, ref_thresh = sklearn.metrics.precision_recall_curve(y, scores)
+        precision, recall, thresh = f(y ,scores)
+        #assert np.allclose(ref_precision, precision)
+        #assert np.allclose(ref_recall, recall)
+        #assert np.allclose(ref_thresh, thresh)
+        try:
+            assert np.allclose(sklearn.metrics.auc(ref_recall, ref_precision), sklearn.metrics.auc(recall, precision))
+        except:
+            print 'n_iter: {}'.format(n_iter)
+            print 'y'
+            print y
+            print 'scores'
+            print scores
+            print 'ref precision'
+            print ref_precision
+            print ref_precision.shape
+            #print np.r_[precision[1:], 1] 
+            #print np.allclose(ref_precision, np.r_[precision[1:], 1] )
+            print sklearn.metrics.auc(ref_recall, ref_precision)
+            print sklearn.metrics.auc(recall, precision)
+            print
+            print 'ref recall'
+            print ref_recall
+            print ref_recall.shape
+            print
+            print 'ref thresh'
+            print ref_thresh
+            print ref_thresh.shape
+            print
+            print 'score precision'
+            print precision
+            print precision.shape
+            print
+            print 'score recall'
+            print recall
+            print recall.shape
+            print 
+            print 'score threshold'
+            print thresh
+            print thresh.shape
+            raise
+
+
+def test_last_axis_precision_recall_curve():
+    dims = [2, 3, 4, 5]
+    for ndim in [1, 2, 3, 4]:
+        if ndim == 1: 
+            d = 10
+        else:
+            d = dims[:ndim]
+        a = np.random.binomial(n=1, p=.5, size=d)
+        p = np.random.random(d)
+        prec, recall, _ = tmetrics.last_axis_precision_recall_curve(a, p)
+        print 'd: {}'.format(d)
+        print prec
+        print recall
+        print _
+
+def test_precision_recall_curves_all_dims(n_iter=1):
+    dims = [(1000,), (500, 100), (50, 300, 400), (20, 50, 100, 30)]
+    int_types = [T.ivector, T.imatrix, T.itensor3, T.itensor4]
+    float_types = [T.fvector, T.fmatrix, T.ftensor3, T.ftensor4]
+    for d, int_type, float_type in zip(dims[1:], int_types[1:], float_types[1:]):
+        yt = int_type('yt')
+        yp = float_type('yp')
+        a = float_type('a')
+        b = float_type('b')
+        gpu_auc = tmetrics.auc(a, b)
+        get_auc = theano.function([a, b], gpu_auc)
+        p_expr, r_expr, t_expr = tmetrics.precision_recall_curves(yt, yp)
+        pr_auc = tmetrics.auc(r_expr, p_expr) 
+        f = theano.function([yt, yp], [p_expr, r_expr, t_expr, pr_auc])
+        for epoch in xrange(n_iter):
+            true = np.random.binomial(n=1, p=.5, size=d).astype('int32')
+            predicted = np.random.random((d)).astype('float32')
+            precision, recall, thresh, avg = f(true, predicted)
+            refp, refr, reft = tmetrics.last_axis_precision_recall_curve(true, predicted)
+            try:
+                assert np.allclose(precision, refp, equal_nan=True)
+                assert np.allclose(recall, refr, equal_nan=True)
+                assert np.allclose(thresh, reft, equal_nan=True)
+                assert np.allclose(avg, get_auc(refr.astype('float32'), refp.astype('float32')), equal_nan=True)
+            except:
+                print true
+                print predicted
+                print 'precision'
+                print precision
+                print 'ref precision'
+                print refp
+                print 'recall'
+                print recall
+                print recall.shape
+                print 'ref recall'
+                print refr
+                print refr.shape
+                print thresh
+                print reft
+                print avg
+                print get_auc(refr.astype('float32'), refp.astype('float32'))
+                raise
+
+
+
 

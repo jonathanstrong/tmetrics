@@ -111,7 +111,7 @@ def kulsinski_similarity(y_true, y_predicted):
     n = y_true.shape[0].astype('float32')
     return (ntf + nft - ntt + n) / (ntf + nft + n)
 
-def _binary_clf_curve(y_true, y_predicted):
+def _vector_clf_curve(y_true, y_predicted):
     """
     sklearn.metrics._binary_clf_curve port
 
@@ -219,7 +219,7 @@ def trapz(y, x=None, dx=1.0, axis=-1):
     return (d * (y[slice1] + y[slice2]) / 2.0).sum(axis)
 
 def auc(x, y):
-    return trapz(y, x)
+    return abs(trapz(y, x))
 
 #def roc_curve(y_true, y_predicted):
 #    fps, tps, thresholds = _binary_clf_curve(y_true, y_predicted)
@@ -310,9 +310,9 @@ def _tensor4_clf_curve(y_true, y_predicted):
     fps = 1 + counts - tps
     return fps, tps, y_predicted
 
-def roc_curves(y_true, y_predicted):
+def _binary_clf_curves(y_true, y_predicted):
     """
-    returns roc curves calculated axis[-1]-wise
+    returns curves calculated axis[-1]-wise
 
     note - despite trying several approaches, could not seem to get a
     n-dimensional verision of clf_curve to work, so abandoning. 2,3,4 is fine.
@@ -324,7 +324,7 @@ def roc_curves(y_true, y_predicted):
         raise TypeError('This only works for symbolic variables.')
 
     if y_true.ndim == 1:
-        clf_curve_fn = _binary_clf_curve
+        clf_curve_fn = _vector_clf_curve
     elif y_true.ndim == 2:
         clf_curve_fn = _matrix_clf_curve
     elif y_true.ndim == 3: 
@@ -334,23 +334,75 @@ def roc_curves(y_true, y_predicted):
     else:
         raise NotImplementedError('Not implemented for ndim {}'.format(y_true.ndim))
 
-    last_col = [slice(None) for x in xrange(y_true.ndim)]
-    last_col[-1] = -1
     fps, tps, thresholds = clf_curve_fn(y_true, y_predicted)
+    return fps, tps, thresholds
+
+def _last_col_idx(ndim):
+    last_col = [slice(None) for x in xrange(ndim)]
+    last_col[-1] = -1
+    return last_col
+
+def _reverse_idx(ndim):
+    reverse = [slice(None) for _ in range(ndim-1)]
+    reverse.append(slice(None, None, -1))
+    return reverse
+
+def roc_curves(y_true, y_predicted):
+    "returns roc curves calculated axes[-1]-wise"
+    fps, tps, thresholds = _binary_clf_curves(y_true, y_predicted)
+    last_col = _last_col_idx(y_true.ndim)
     fpr = fps.astype('float32') / T.shape_padright(fps[last_col], 1)
     tpr = tps.astype('float32') / T.shape_padright(tps[last_col], 1)
     return fpr, tpr, thresholds
 
 def roc_auc_scores(y_true, y_predicted):
     "returns roc auc scores calculated axis[-1]-wise"
-    if not (y_true.ndim == y_predicted.ndim):
-        raise ValueError('Dimension mismatch, ({}, {})'.format(y_true.ndim, y_predicted.ndim))
-    if not isinstance(y_true, T.TensorVariable) or not isinstance(y_predicted, T.TensorVariable):
-        raise TypeError('This only works for symbolic variables.')
     fpr, tpr, thresholds = roc_curves(y_true, y_predicted)
     return auc(fpr, tpr)
+
+def roc_auc_loss(y_true, y_predicted):
+    return 1-roc_auc_scores(y_true, y_predicted)
+
+def precision_recall_curves(y_true, y_predicted):
+    fps, tps, thresholds = _binary_clf_curves(y_true, y_predicted)
+    last_col = _last_col_idx(y_true.ndim)
+    last_col[-1] = [-1] 
+    precision = tps.astype('float32') / (tps + fps)
+    if y_true.ndim == 1:
+        recall = tps.astype('float32') / tps[-1]
+    else:
+        recall = tps.astype('float32') / tps[last_col]
+    reverse = _reverse_idx(fps.ndim)
+    precision = precision[reverse]
+    recall = recall[reverse]
+    thresholds = thresholds[reverse]
+    if y_true.ndim == 1:
+        ones, zeros = [1], [0]
+    else:
+        ones = T.ones_like(precision)[last_col]
+        zeros = T.zeros_like(recall)[last_col]
+    precision = T.concatenate([precision, ones], axis=-1) 
+    recall = T.concatenate([recall, zeros], axis=-1)
+    return precision, recall, thresholds
+
 
 #aliases
 roc_curve = roc_curves
 roc_auc_score = roc_auc_scores
+
+def last_axis_precision_recall_curve(y_true, y_predicted):
+    fps, tps, thresholds = _last_axis_binary_clf_curve(y_true, y_predicted)
+    i = [slice(None)] * fps.ndim
+    i[-1] = [-1]
+    precision = tps.astype('float32') / (tps + fps)
+    recall = tps.astype('float32') / tps[i]
+    i[-1] = slice(None, None, -1)
+    precision = precision[i]
+    recall = recall[i]
+    thresholds = thresholds[i]
+    i[-1] = [-1]
+    precision = np.concatenate([precision, np.ones(precision.shape)[i]], axis=-1)
+    recall = np.concatenate([recall, np.zeros(recall.shape)[i]], axis=-1)
+    return precision, recall, thresholds
+
 
