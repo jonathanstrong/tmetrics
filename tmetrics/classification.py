@@ -348,7 +348,7 @@ def _reverse_idx(ndim):
     return reverse
 
 def roc_curves(y_true, y_predicted):
-    "returns roc curves calculated axes[-1]-wise"
+    "returns roc curves calculated axis -1-wise"
     fps, tps, thresholds = _binary_clf_curves(y_true, y_predicted)
     last_col = _last_col_idx(y_true.ndim)
     fpr = fps.astype('float32') / T.shape_padright(fps[last_col], 1)
@@ -356,7 +356,7 @@ def roc_curves(y_true, y_predicted):
     return fpr, tpr, thresholds
 
 def roc_auc_scores(y_true, y_predicted):
-    "returns roc auc scores calculated axis[-1]-wise"
+    "roc auc scores calculated axis -1-wise"
     fpr, tpr, thresholds = roc_curves(y_true, y_predicted)
     return auc(fpr, tpr)
 
@@ -364,6 +364,7 @@ def roc_auc_loss(y_true, y_predicted):
     return 1-roc_auc_scores(y_true, y_predicted)
 
 def precision_recall_curves(y_true, y_predicted):
+    "precision recall curves calculated axis -1-wise"
     fps, tps, thresholds = _binary_clf_curves(y_true, y_predicted)
     last_col = _last_col_idx(y_true.ndim)
     last_col[-1] = [-1] 
@@ -385,10 +386,21 @@ def precision_recall_curves(y_true, y_predicted):
     recall = T.concatenate([recall, zeros], axis=-1)
     return precision, recall, thresholds
 
+def average_precision_scores(y_true, y_predicted):
+    precision, recall, _ = precision_recall_curves(y_true, y_predicted)
+    return auc(recall, precision)
+
+def precision_recall_loss(y_true, y_predicted):
+    "convenience function to minimize for"
+    return 1-average_precision_scores(y_true, y_predicted)
+
+
 
 #aliases
 roc_curve = roc_curves
 roc_auc_score = roc_auc_scores
+precision_recall_curve = precision_recall_curves
+average_precision_score = average_precision_scores
 
 def last_axis_precision_recall_curve(y_true, y_predicted):
     fps, tps, thresholds = _last_axis_binary_clf_curve(y_true, y_predicted)
