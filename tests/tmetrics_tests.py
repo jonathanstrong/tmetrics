@@ -17,11 +17,11 @@ def teardown():
     pass
 
 def test_vector_clf_curve():
-    yt = T.ivector('yt')
+    yt = T.fvector('yt')
     yp = T.fvector('yp')
     tps = tmetrics.classification._vector_clf_curve(yt, yp)
     f = theano.function([yt, yp], tps, allow_input_downcast=True)
-    true, predicted = np.random.binomial(n=1, p=.5, size=10), np.random.random(10)
+    true, predicted = np.random.binomial(n=1, p=.5, size=10).astype('float32'), np.random.random(10).astype('float32')
     fps, tps, _ = f(true, predicted)
     s_fps, s_tps, s_ = sklearn.metrics.ranking._binary_clf_curve(true, predicted)
     np.set_printoptions(suppress=True)
@@ -59,11 +59,11 @@ def test_brier_score_loss_from_scikit_learn_example():
     0.037...
 
     """
-    y_true = T.ivector('y_true')
+    y_true = T.fvector('y_true')
     y_predicted = T.fvector('y_predicted')
     brier_score = tmetrics.brier_score_loss(y_true, y_predicted)
     f = theano.function([y_true, y_predicted], brier_score)
-    yt = np.array([0, 1, 1, 0], 'int32')
+    yt = np.array([0, 1, 1, 0], 'float32')
     yp = np.array([.1, .9, .8, .3], theano.config.floatX)
     refscore = sklearn.metrics.brier_score_loss(yt, yp)
     tol = .01
@@ -75,12 +75,12 @@ def test_brier_score_loss_from_scikit_learn_example():
 
 
 def test_brier_score_loss_2D():
-    yt = np.array([0, 1, 1, 0], 'int32')
+    yt = np.array([0, 1, 1, 0], 'float32')
     yp = np.array([.1, .9, .8, .3], theano.config.floatX)
     refscore = sklearn.metrics.brier_score_loss(yt, yp)
     yt = np.concatenate([yt.reshape(1, 4), yt.reshape(1, 4)], axis=0)
     yp = np.concatenate([yp.reshape(1, 4), yp.reshape(1, 4)], axis=0)
-    y_true = T.imatrix('y_true')
+    y_true = T.fmatrix('y_true')
     y_predicted = T.fmatrix('y_predicted')
     brier_score = tmetrics.brier_score_loss(y_true, y_predicted)
     f = theano.function([y_true, y_predicted], brier_score)
@@ -90,7 +90,7 @@ def test_brier_score_loss_2D():
 
 
 def test_hammming_loss():
-    true = np.random.binomial(n=1, p=.5, size=10)
+    true = np.random.binomial(n=1, p=.5, size=10).astype('float32')
     predicted = np.round(np.random.random(10))
     refscore = hamming(true, predicted)
     yt = T.fvector('yt')
@@ -106,7 +106,7 @@ def test_hammming_loss():
     assert np.allclose(refscore, score)
 
 def test_jaccard_similarity():
-    true = np.random.binomial(n=1, p=.5, size=10)
+    true = np.random.binomial(n=1, p=.5, size=10).astype('float32')
     predicted = np.round(np.random.random(10))
     refscore = jaccard(true, predicted)
     yt = T.fvector('yt')
@@ -122,7 +122,7 @@ def test_jaccard_similarity():
     assert np.allclose(refscore, score)
 
 def test_jaccard_similarity_2D():
-    true = np.random.binomial(n=1, p=.5, size=10)
+    true = np.random.binomial(n=1, p=.5, size=10).astype('float32')
     predicted = np.round(np.random.random(10))
     refscore = np.asarray([jaccard(true, predicted)])
     double = lambda x: np.concatenate([x.reshape((1, len(x))), x.reshape((1, len(x)))])
@@ -145,10 +145,10 @@ def test_kulsinski_similarity():
     true = np.double(np.random.binomial(n=1, p=.5, size=10))
     predicted = np.double(np.round(np.random.random(10)))
     refscore = kulsinski(true, predicted)
-    yt = T.fvector('yt')
-    yp = T.fvector('yp')
+    yt = T.vector('yt')
+    yp = T.vector('yp')
     f = theano.function([yt, yp], tmetrics.classification.kulsinski_similarity(yt, yp), allow_input_downcast=True)
-    score = f(true, predicted)
+    score = f(true.astype('float32'), predicted.astype('float32'))
     print 'true'
     print true
     print 'predicted'
@@ -158,8 +158,8 @@ def test_kulsinski_similarity():
     assert np.allclose(refscore, score)
 
 def test_trapz():
-    x = T.ivector('x')
-    y = T.ivector('y')
+    x = T.vector('x')
+    y = T.vector('y')
     z = tmetrics.classification.trapz(y, x)
     refscore = np.trapz([1,2,3], x=[4,6,8])
     f = theano.function([y, x], z, allow_input_downcast=True)
@@ -190,11 +190,11 @@ def test_trapz():
     assert np.allclose(score, refscore)
 
 def test_roc_auc_score():
-    true = np.random.binomial(n=1, p=.5, size=1000).astype('int32')
-    #true = np.array([0, 0, 1, 1]).astype('int32')
-    predicted = np.random.random(size=1000).astype('float32')
+    true = np.random.binomial(n=1, p=.5, size=50).astype('float32')
+    #true = np.array([0, 0, 1, 1]).astype('float32')
+    predicted = np.random.random(size=50).astype('float32')
     #predicted = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
-    yt = T.ivector('y_true')
+    yt = T.fvector('y_true')
     yp = T.fvector('y_predicted')
     roc_auc_score_expr = tmetrics.classification.roc_auc_score(yt, yp)
     refscore = sklearn.metrics.roc_auc_score(true, predicted)
@@ -225,7 +225,7 @@ def test_roc_auc_score():
         print '_thresh'
         print result[5]
         print 'roc score'
-        print results[6]
+        print result[6]
 
         print '** refscore **'
         curve = sklearn.metrics.ranking._binary_clf_curve(true, predicted)
@@ -262,9 +262,9 @@ def test_that_we_can_work_around_lexsort():
 
 """ 
 def test_roc_curve_nd():
-    true = np.random.binomial(n=1, p=.5, size=(2, 5)).astype('int32')
+    true = np.random.binomial(n=1, p=.5, size=(2, 5)).astype('float32')
     predicted = np.random.random((2, 5)).astype('float32')
-    yt = T.imatrix('yt')
+    yt = T.fmatrix('yt')
     yp = T.fmatrix('yp')
     clf_curve = tmetrics.classification._binary_clf_curve_nd(yt, yp)
     f = theano.function([yt, yp], clf_curve)
@@ -281,9 +281,9 @@ def test_roc_curve_nd():
 
 
 def test_matrix_roc_auc_scores():
-    true = np.random.binomial(n=1, p=.5, size=(20, 100)).astype('int32')
+    true = np.random.binomial(n=1, p=.5, size=(20, 100)).astype('float32')
     predicted = np.random.random((20, 100)).astype('float32')
-    yt, yp = T.imatrix('yt'), T.fmatrix('yp')
+    yt, yp = T.fmatrix('yt'), T.fmatrix('yp')
     refscore = tmetrics.classification.last_axis_roc_auc_scores(true, predicted)
     roc_auc_scores = tmetrics.classification.roc_auc_scores(yt, yp)
     f = theano.function([yt, yp], roc_auc_scores)
@@ -295,9 +295,9 @@ def test_matrix_roc_auc_scores():
     assert np.allclose(refscore, score)
 
 def test_tensor3_roc_auc_scores():
-    true = np.random.binomial(n=1, p=.5, size=(20, 30, 40)).astype('int32')
+    true = np.random.binomial(n=1, p=.5, size=(20, 30, 40)).astype('float32')
     predicted = np.random.random((20, 30, 40)).astype('float32')
-    yt, yp = T.itensor3('yt'), T.ftensor3('yp')
+    yt, yp = T.ftensor3('yt'), T.ftensor3('yp')
     refscore = tmetrics.classification.last_axis_roc_auc_scores(true, predicted)
     roc_auc_scores = tmetrics.classification.roc_auc_scores(yt, yp)
     f = theano.function([yt, yp], roc_auc_scores)
@@ -309,9 +309,9 @@ def test_tensor3_roc_auc_scores():
     assert np.allclose(refscore, score, equal_nan=True)
 
 def test_tensor4_roc_auc_scores():
-    true = np.random.binomial(n=1, p=.5, size=(20, 30, 40, 50)).astype('int32')
+    true = np.random.binomial(n=1, p=.5, size=(20, 30, 40, 50)).astype('float32')
     predicted = np.random.random((20, 30, 40, 50)).astype('float32')
-    yt, yp = T.itensor4('yt'), T.ftensor4('yp')
+    yt, yp = T.ftensor4('yt'), T.ftensor4('yp')
     refscore = tmetrics.classification.last_axis_roc_auc_scores(true, predicted)
     roc_auc_scores = tmetrics.classification.roc_auc_scores(yt, yp)
     f = theano.function([yt, yp], roc_auc_scores)
@@ -324,33 +324,33 @@ def test_tensor4_roc_auc_scores():
 
 @nose.tools.raises(TypeError)
 def test_roc_curves_exception_if_numpy_object_passed():
-    y = np.array([0, 0, 1, 1]).astype('int32')
+    y = np.array([0, 0, 1, 1]).astype('float32')
     scores = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
     fpr, tpr, thresh = tmetrics.classification.roc_curves(y, scores)
 
 @nose.tools.raises(ValueError)
 def test_roc_curves_dimension_checker():
-    y = T.imatrix('y')
+    y = T.fmatrix('y')
     p = T.ftensor3('p')
     fpr, tpr, _ = tmetrics.classification.roc_curves(y, p)
 
 @nose.tools.raises(TypeError)
 def test_roc_auc_scores_exception_if_numpy_object_passed():
-    y = np.array([0, 0, 1, 1]).astype('int32')
+    y = np.array([0, 0, 1, 1]).astype('float32')
     scores = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
     fpr, tpr, thresh = tmetrics.classification.roc_auc_scores(y, scores)
 
 @nose.tools.raises(ValueError)
 def test_roc_auc_scores_dimension_checker():
-    y = T.imatrix('y')
+    y = T.fmatrix('y')
     p = T.ftensor3('p')
     fpr, tpr, _ = tmetrics.classification.roc_auc_scores(y, p)
 
 
 def test_1D_roc_auc_scores():
-    yt = T.ivector('yt')
+    yt = T.fvector('yt')
     yp = T.fvector('yp')
-    y = np.array([0, 0, 1, 1]).astype('int32')
+    y = np.array([0, 0, 1, 1]).astype('float32')
     scores = np.array([0.1, 0.4, 0.35, 0.8]).astype('float32')
     ref_fpr, ref_tpr, ref_thresh = sklearn.metrics.roc_curve(y, scores)
     roc_auc_scores = tmetrics.classification.roc_auc_scores(yt, yp)
@@ -364,9 +364,9 @@ def test_1D_roc_auc_scores():
 
 def test_roc_scores_slogan():
     "returns roc curves calculated axis[-1]-wise"
-    yt = T.itensor4('yt')
-    yp = T.ftensor4('yp')
-    true = np.random.binomial(n=1, p=.5, size=(2, 3, 4, 5)).astype('int32')
+    yt = T.tensor4('yt')
+    yp = T.tensor4('yp')
+    true = np.random.binomial(n=1, p=.5, size=(2, 3, 4, 5)).astype('float32')
     predicted = np.random.random((2, 3, 4, 5)).astype('float32')
     fpr_e, tpr_e, _e = tmetrics.classification.roc_curves(yt, yp)
     scores_expr = tmetrics.classification.roc_auc_scores(yt, yp)
@@ -384,12 +384,12 @@ def test_roc_scores_slogan():
 
 
 def test_precisison_recall_curves_vector(n_iter=1):
-    yt = T.ivector('yt')
+    yt = T.fvector('yt')
     yp = T.fvector('yp')
     p_expr, r_expr, thresh_expr = tmetrics.classification.precision_recall_curves(yt, yp)
     f = theano.function([yt, yp], [p_expr, r_expr, thresh_expr])
     for iterator in xrange(n_iter):
-        y = np.random.binomial(n=1, p=.5, size=20).astype('int32')
+        y = np.random.binomial(n=1, p=.5, size=20).astype('float32')
         scores = np.random.random(20).astype('float32')
         ref_precision, ref_recall, ref_thresh = sklearn.metrics.precision_recall_curve(y, scores)
         precision, recall, thresh = f(y ,scores)
@@ -441,7 +441,7 @@ def test_last_axis_precision_recall_curve():
             d = 10
         else:
             d = dims[:ndim]
-        a = np.random.binomial(n=1, p=.5, size=d)
+        a = np.random.binomial(n=1, p=.5, size=d).astype('float32')
         p = np.random.random(d)
         prec, recall, _ = tmetrics.last_axis_precision_recall_curve(a, p)
         print 'd: {}'.format(d)
@@ -450,8 +450,8 @@ def test_last_axis_precision_recall_curve():
         print _
 
 def test_precision_recall_curves_all_dims(n_iter=1):
-    dims = [(1000,), (500, 100), (50, 300, 400), (20, 50, 100, 30)]
-    int_types = [T.ivector, T.imatrix, T.itensor3, T.itensor4]
+    dims = [(50,), (50, 100), (50, 30, 40), (5, 10, 5, 3)]
+    int_types = [T.fvector, T.fmatrix, T.ftensor3, T.ftensor4]
     float_types = [T.fvector, T.fmatrix, T.ftensor3, T.ftensor4]
     for d, int_type, float_type in zip(dims[1:], int_types[1:], float_types[1:]):
         yt = int_type('yt')
@@ -464,7 +464,7 @@ def test_precision_recall_curves_all_dims(n_iter=1):
         pr_auc = tmetrics.auc(r_expr, p_expr) 
         f = theano.function([yt, yp], [p_expr, r_expr, t_expr, pr_auc])
         for epoch in xrange(n_iter):
-            true = np.random.binomial(n=1, p=.5, size=d).astype('int32')
+            true = np.random.binomial(n=1, p=.5, size=d).astype('float32')
             predicted = np.random.random((d)).astype('float32')
             precision, recall, thresh, avg = f(true, predicted)
             refp, refr, reft = tmetrics.last_axis_precision_recall_curve(true, predicted)

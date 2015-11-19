@@ -76,7 +76,7 @@ def hamming_loss(y_true, y_predicted):
 
     note - we round predicted because float probabilities would not work
     """
-    return T.neq(y_true, T.round(y_predicted)).mean(axis=-1)
+    return T.neq(y_true, T.round(y_predicted)).astype(theano.config.floatX).mean(axis=-1)
 
 def jaccard_similarity(y_true, y_predicted):
     """
@@ -110,42 +110,7 @@ def kulsinski_similarity(y_true, y_predicted):
     nff, nft, ntf, ntt = _nbool_correspond_all(y_true, y_predicted)
     n = y_true.shape[0].astype('float32')
     return (ntf + nft - ntt + n) / (ntf + nft + n)
-
-def _vector_clf_curve(y_true, y_predicted):
-    """
-    sklearn.metrics._binary_clf_curve port
-
-    y_true: tensor (ivector): y true
-    y_predicted: tensor (fvector): y predicted
-
-    returns: fps, tps, threshold_values
-    fps: tensor (ivector): false positivies
-    tps: tensor (ivector): true positives
-    threshold_values: tensor (fvector): value of y predicted at each threshold 
-        along the curve
-
-    restrictions: 
-        -not numpy compatible
-        -only works with two vectors (not matrix or tensor)
-
-
-    """
-    assert y_true.ndim == y_predicted.ndim == 1
-
-    desc_score_indices = y_predicted.argsort()[::-1]
-    sorted_y_predicted = y_predicted[desc_score_indices]
-    sorted_y_true = y_true[desc_score_indices]
-
-    distinct_value_indices = (1-T.isclose(T.extra_ops.diff(sorted_y_predicted), 0)).nonzero()[0]
-    curve_cap = T.extra_ops.repeat(sorted_y_predicted.size - 1, 1)
-    threshold_indices = T.concatenate([distinct_value_indices, curve_cap])
-
-    tps = T.extra_ops.cumsum(sorted_y_true[threshold_indices])
-    fps = 1 + threshold_indices - tps
-    threshold_values = sorted_y_predicted[threshold_indices]
-
-    return fps, tps, threshold_values
-      
+     
 def trapz(y, x=None, dx=1.0, axis=-1):
     """
     reference implementation: numpy.trapz 
@@ -205,7 +170,7 @@ def trapz(y, x=None, dx=1.0, axis=-1):
         if x.ndim == 1:
             d = T.extra_ops.diff(x)
             # reshape to correct shape
-            shape = T.ones(y.ndim, dtype='int32')
+            shape = T.ones(y.ndim, dtype='int8')
             shape = T.set_subtensor(shape[axis], d.shape[0])
             d = d.reshape(shape)
         else:
@@ -231,18 +196,16 @@ def auc(x, y):
 #    fpr, tpr, thresholds = roc_curve(y_true, y_predicted)
 #    return auc(fpr, tpr)
 
-"""
-NUMPY ONLY FUNCTIONS
-"""
 def _last_axis_binary_clf_curve(y_true, y_predicted):
     """
     returns y_predicted.shape[-2] binary clf curves calculated axis[-1]-wise
+    this is a numpy implementation
 
     """
     assert y_true.shape == y_predicted.shape
     axis = -1
     sort_idx = list(np.ogrid[[slice(x) for x in y_predicted.shape]])
-    sort_idx[axis] = y_predicted.argsort(axis=axis)
+    sort_idx[axis] = y_predicted.argsort(axis=axis).astype('int8')
     reverse = [slice(None)] * y_predicted.ndim
     reverse[axis] = slice(None, None, -1)
     sorted_y_predicted = y_predicted[sort_idx][reverse]
@@ -257,6 +220,7 @@ def _last_axis_binary_clf_curve(y_true, y_predicted):
     return fps, tps, threshold_values
 
 def last_axis_roc_curve(y_true, y_predicted):
+    "numpy implementation"
     fps, tps, thresholds = _last_axis_binary_clf_curve(y_true, y_predicted)
     i = [slice(None)] * fps.ndim
     i[-1] = -1
@@ -269,44 +233,78 @@ def last_axis_roc_auc_scores(y_true, y_predicted):
     fpr, tpr, _ = last_axis_roc_curve(y_true, y_predicted)
     return np.trapz(tpr, fpr)
 
+def _vector_clf_curve(y_true, y_predicted):
+    """
+    sklearn.metrics._binary_clf_curve port
 
+    y_true: tensor (vector): y true
+    y_predicted: tensor (vector): y predicted
+
+    returns: fps, tps, threshold_values
+    fps: tensor (vector): false positivies
+    tps: tensor (vector): true positives
+    threshold_values: tensor (vector): value of y predicted at each threshold 
+        along the curve
+
+    restrictions: 
+        -not numpy compatible
+        -only works with two vectors (not matrix or tensor)
+
+
+    """
+    assert y_true.ndim == y_predicted.ndim == 1
+
+    desc_score_indices = y_predicted.argsort()[::-1].astype('int8')
+    sorted_y_predicted = y_predicted[desc_score_indices]
+    sorted_y_true = y_true[desc_score_indices]
+
+    distinct_value_indices = (1-T.isclose(T.extra_ops.diff(sorted_y_predicted), 0)).nonzero()[0]
+    curve_cap = T.extra_ops.repeat(sorted_y_predicted.size - 1, 1)
+    threshold_indices = T.concatenate([distinct_value_indices, curve_cap]).astype('int8')
+
+    tps = T.extra_ops.cumsum(sorted_y_true[threshold_indices])
+    fps = 1 + threshold_indices - tps
+    threshold_values = sorted_y_predicted[threshold_indices]
+
+    return fps, tps, threshold_values
+ 
 def _matrix_clf_curve(y_true, y_predicted):
     assert y_true.ndim == y_predicted.ndim == 2
-    row_i = T.arange(y_true.shape[0]).dimshuffle(0, 'x')
-    col_i = y_predicted.argsort()
+    row_i = T.arange(y_true.shape[0], dtype='int8').dimshuffle(0, 'x')
+    col_i = y_predicted.argsort().astype('int8')
     reverse = [slice(None), slice(None, None, -1)]
     y_true = y_true[row_i, col_i][reverse]
     y_predicted = y_predicted[row_i, col_i][reverse]
     tps = y_true.cumsum(axis=-1)
-    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1])
+    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1], dtype='int8')
     fps = 1 + counts - tps
     return fps, tps, y_predicted
 
 def _tensor3_clf_curve(y_true, y_predicted):
     assert y_true.ndim == y_predicted.ndim == 3
-    x_i = T.arange(y_true.shape[0]).dimshuffle(0, 'x', 'x')
-    y_i = T.arange(y_true.shape[1]).dimshuffle('x', 0, 'x')
-    z_i = y_predicted.argsort()
+    x_i = T.arange(y_true.shape[0], dtype='int8').dimshuffle(0, 'x', 'x')
+    y_i = T.arange(y_true.shape[1], dtype='int8').dimshuffle('x', 0, 'x')
+    z_i = y_predicted.argsort().astype('int8')
     reverse = [slice(None), slice(None), slice(None, None, -1)]
     y_true = y_true[x_i, y_i, z_i][reverse]
     y_predicted = y_predicted[x_i, y_i, z_i][reverse]
     tps = y_true.cumsum(axis=-1)
-    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1])
+    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1], dtype='int8')
     fps = 1 + counts - tps
     return fps, tps, y_predicted
 
 def _tensor4_clf_curve(y_true, y_predicted):
     assert y_true.ndim == y_predicted.ndim == 4
-    a_i = T.arange(y_true.shape[0]).dimshuffle(0, 'x', 'x', 'x')
-    b_i = T.arange(y_true.shape[1]).dimshuffle('x', 0, 'x', 'x')
-    c_i = T.arange(y_true.shape[2]).dimshuffle('x', 'x', 0, 'x')
-    d_i = y_predicted.argsort()
+    a_i = T.arange(y_true.shape[0], dtype='int8').dimshuffle(0, 'x', 'x', 'x')
+    b_i = T.arange(y_true.shape[1], dtype='int8').dimshuffle('x', 0, 'x', 'x')
+    c_i = T.arange(y_true.shape[2], dtype='int8').dimshuffle('x', 'x', 0, 'x')
+    d_i = y_predicted.argsort().astype('int8')
 
     reverse = [slice(None), slice(None), slice(None), slice(None, None, -1)]
     y_true = y_true[a_i, b_i, c_i, d_i][reverse]
     y_predicted = y_predicted[a_i, b_i, c_i, d_i][reverse]
     tps = y_true.cumsum(axis=-1)
-    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1])
+    counts = T.ones_like(y_true) * T.arange(y_predicted.shape[-1], dtype='int8')
     fps = 1 + counts - tps
     return fps, tps, y_predicted
 
@@ -367,7 +365,7 @@ def precision_recall_curves(y_true, y_predicted):
     "precision recall curves calculated axis -1-wise"
     fps, tps, thresholds = _binary_clf_curves(y_true, y_predicted)
     last_col = _last_col_idx(y_true.ndim)
-    last_col[-1] = [-1] 
+    last_col[-1] = np.asarray([-1], dtype='int8')
     precision = tps.astype('float32') / (tps + fps)
     if y_true.ndim == 1:
         recall = tps.astype('float32') / tps[-1]
@@ -378,7 +376,7 @@ def precision_recall_curves(y_true, y_predicted):
     recall = recall[reverse]
     thresholds = thresholds[reverse]
     if y_true.ndim == 1:
-        ones, zeros = [1], [0]
+        ones, zeros = np.asarray([1], dtype='float32'), np.asarray([0], dtype='float32')
     else:
         ones = T.ones_like(precision)[last_col]
         zeros = T.zeros_like(recall)[last_col]
@@ -394,14 +392,6 @@ def precision_recall_loss(y_true, y_predicted):
     "convenience function to minimize for"
     return 1-average_precision_scores(y_true, y_predicted)
 
-
-
-#aliases
-roc_curve = roc_curves
-roc_auc_score = roc_auc_scores
-precision_recall_curve = precision_recall_curves
-average_precision_score = average_precision_scores
-
 def last_axis_precision_recall_curve(y_true, y_predicted):
     fps, tps, thresholds = _last_axis_binary_clf_curve(y_true, y_predicted)
     i = [slice(None)] * fps.ndim
@@ -416,5 +406,14 @@ def last_axis_precision_recall_curve(y_true, y_predicted):
     precision = np.concatenate([precision, np.ones(precision.shape)[i]], axis=-1)
     recall = np.concatenate([recall, np.zeros(recall.shape)[i]], axis=-1)
     return precision, recall, thresholds
+
+
+
+#aliases
+roc_curve = roc_curves
+roc_auc_score = roc_auc_scores
+precision_recall_curve = precision_recall_curves
+average_precision_score = average_precision_scores
+_binary_clf_curve = _binary_clf_curves
 
 
