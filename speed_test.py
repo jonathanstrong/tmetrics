@@ -6,18 +6,22 @@ import theano
 import theano.tensor as T
 import sklearn.metrics
 
-def _test(fn, yt, yp, n_iter=3):
+def _test(fn, yt, yp, n_iter=5):
     times = []
     for _ in xrange(n_iter):
-        start = time.time()
-        result = fn(yt, yp)
-        times.append(time.time() - start)
+        try:
+            start = time.time()
+            result = fn(yt, yp)
+            times.append(time.time() - start)
+        except Exception as e:
+            print 'function {} failed: {}'.format(fn, e)
+            return np.nan
     return np.mean(times)
 
 
 
 def speed_test_roc_auc_four_dims():
-    shapes = [(5000,), (5000, 100), (500, 300, 40), (500, 4, 500, 500)]
+    shapes = [(500000,), (5000, 1000), (50, 300, 400), (50, 4, 500, 500)]
     types = [T.fvector, T.fmatrix, T.ftensor3, T.ftensor4]
     results = []
     for shape, _type, in zip(shapes, types):
