@@ -21,7 +21,7 @@ def _test(fn, yt, yp, n_iter=5):
 
 
 def speed_test_roc_auc_four_dims():
-    shapes = [(500000,), (5000, 1000), (50, 300, 400), (50, 4, 500, 500)]
+    shapes = [(1000000,), (5000, 1000), (50, 300, 400), (50, 4, 500, 500)]
     types = [T.fvector, T.fmatrix, T.ftensor3, T.ftensor4]
     results = []
     for shape, _type, in zip(shapes, types):
